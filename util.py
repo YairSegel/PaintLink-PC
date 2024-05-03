@@ -2,7 +2,7 @@
 Point = tuple[float, float]
 Color = int  # 0xFFFFFF
 ColorPoint = tuple[float, float, Color]
-ClientAddress = tuple[str, int]  # ("127.0.0.1", 12345)
+ClientAddress = tuple[str, int] or str  # ("127.0.0.1", 12345)
 
 
 class Stroke:  # Extending list makes init take too long

@@ -8,7 +8,7 @@ def send_messages_to_server():
         client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         while True:
             data = input("next:\n")
-            client_socket.sendto(data.encode("utf-8"), ("<broadcast>", server_port))
+            client_socket.sendto(data.encode("utf-8"), ("255.255.255.255", server_port))
             if not data:
                 break
             print(client_socket.recv(1024))

@@ -1,7 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from struct import unpack
 from typing import Callable
 
+from signatures import Verifier
 from util import *
 
 
@@ -12,30 +13,43 @@ class ServerProtocol:
     finished_strokes: list[Stroke]
     change_flag: Flag
 
+    verifiers: dict[ClientAddress, Verifier] = field(default_factory=dict)
+
     def connection_made(self, transport):
         self.transport = transport  # noqa: used for returning messages
 
-    def datagram_received(self, data: bytes, addr: ClientAddress):
-        if b"Where are you?" in data:  # check if packet is dhcp packet
-            print(f"Replying to DHCP discover packet from {addr}")
-            self.transport.sendto(b"Freddie nice to meet\r\r", addr)  # add useful info
-            return
-        elif len(data) != 16:
+    def datagram_received(self, data: bytes, full_addr: ClientAddress):
+        print(data)
+        addr = full_addr[0]
+
+        if len(data) != 500:  # check if packet is dhcp packet
+            try:
+                self.verifiers[addr] = Verifier(data.strip())
+                print(f"Replying to DHCP discover packet from {addr}")
+                self.transport.sendto(b"Freddie nice to meet\r\r", full_addr)  # add useful info
+            finally:
+                return
+
+        if not self.verifiers.get(addr):
             return
 
         # todo: do encryption
         # todo: try to add stabilizer
+        if not self.verifiers[addr].verify(data[:16], data[20:20+unpack(">i", data[16:20])[0]]):  # todo: clean this
+            print(f"Got a non-valid request from {addr}")
+            return
+        print("bonanza")
 
         old_position = self.clients.get(addr)
         current_position: ColorPoint = unpack(">ffi", data[:12])  # noqa
-        if old_position is None:  # New client
+        if old_position is None:  # New client todo: move up
             print(f"New client: {addr}")
             self.clients[addr] = current_position
             self.ongoing_strokes[addr] = Stroke()
         else:
             self.clients[addr] = nudge_point(old_position, current_position)
 
-        pressed = unpack(">i", data[12:])[0]
+        pressed = unpack(">i", data[12:16])[0]
         if pressed:
             self.ongoing_strokes[addr].append(self.clients[addr][:2])
         else:

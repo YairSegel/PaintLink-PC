@@ -13,7 +13,7 @@ async def main():
     changed = Flag()
 
     internal_ip = socket.gethostbyname(socket.gethostname())
-    internal_ip = "10.0.0.9"
+    # internal_ip = "10.0.0.9"
     print(f"{internal_ip=}")
 
     print("Starting UDP server")
