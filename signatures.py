@@ -8,8 +8,6 @@ class Verifier:
     algorithm = ECDSA(hashes.SHA256())
 
     def __init__(self, public_key: bytes):
-        # if type(public_key) is str:  # public_key comes as hex string
-        #     public_key = bytes.fromhex(public_key)
         self.key = serialization.load_der_public_key(public_key, backend=default_backend())
 
     def verify(self, message: bytes, signature: bytes) -> bool:

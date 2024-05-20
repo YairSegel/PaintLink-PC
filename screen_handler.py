@@ -1,8 +1,8 @@
 import asyncio
 from dataclasses import dataclass
 
-import numpy as np
 import pygame
+from numpy import array as np_array, linspace as np_linspace
 from scipy.interpolate import splev, splprep
 
 from util import *
@@ -16,8 +16,8 @@ POINT_RADIUS = 5
 
 @dataclass
 class Screen:
-    clients: dict[ClientAddress, ColorPoint]
-    ongoing_strokes: dict[ClientAddress, Stroke]
+    clients: dict[IP, ColorPoint]
+    ongoing_strokes: dict[IP, Stroke]
     finished_strokes: list[Stroke]
     update_flag: Flag
 
@@ -30,17 +30,17 @@ class Screen:
                                                   (POINTER_RADIUS * 2, POINTER_RADIUS * 2))
 
     @staticmethod
-    def stop():
+    def stop() -> None:
         pygame.quit()
 
     def get_program(self) -> asyncio.Task:
         return asyncio.create_task(self._run())
 
-    async def _run(self):
+    async def _run(self) -> None:
         window = pygame.display.set_mode(DEFAULT_SCREEN_SIZE, pygame.RESIZABLE)  # pygame.FULLSCREEN removes controls
         window_size = window.get_size()
         while True:
-            # self.clock.tick(FPS)  # this doesn't let the server run
+            # self.clock.tick(FPS)  # doesn't let the server run
             await asyncio.sleep(1 / FPS)
 
             for event in pygame.event.get():
@@ -67,22 +67,17 @@ class Screen:
                 pygame.draw.lines(window, 0x000000, False, line_finder(points), width=POINT_RADIUS - 1)
 
             for client in self.clients.values():
-                # window.blit(self.pointer_svg, self.pointer_svg.get_rect(center=client.as_tuple(window_size)))
-                # pygame.draw.circle(window, client.color, client.as_tuple(window_size), POINT_RADIUS)
-                window.blit(self.pointer_svg,
-                            self.pointer_svg.get_rect(center=(client[0] * window_size[0], client[1] * window_size[1])))
-                pygame.draw.circle(window, client[2], (client[0] * window_size[0], client[1] * window_size[1]),
-                                   POINT_RADIUS)
+                client_pos = (client[0] * window_size[0], client[1] * window_size[1])
+                window.blit(self.pointer_svg, self.pointer_svg.get_rect(center=client_pos))
+                pygame.draw.circle(window, client[2], client_pos, POINT_RADIUS)
             pygame.display.flip()
 
 
-def line_finder(points: list[Point]) -> tuple[Point]:
+def line_finder(points: list[Point]) -> tuple[Point, ...]:
     # make sure that points contains no consecutive duplicates!
     # https://stackoverflow.com/questions/31464345/fitting-a-closed-curve-to-a-set-of-points
-    points = np.array(points)
-
-    tck, u = splprep(points.T, s=0)  # noqa
-    u_new = np.linspace(u.min(), u.max(), 1000)
+    tck, u = splprep(np_array(points).T, s=0)  # noqa
+    u_new = np_linspace(u.min(), u.max(), 1000)
     x_new, y_new = splev(u_new, tck, der=0)
 
     x_new *= CANVAS_RESOLUTION[0]

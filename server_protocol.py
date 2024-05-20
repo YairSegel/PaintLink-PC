@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from struct import unpack
-from typing import Callable
+from typing import Callable, Any
 
 from signatures import Verifier
 from util import *
@@ -8,73 +8,59 @@ from util import *
 
 @dataclass
 class ServerProtocol:
-    clients: dict[ClientAddress, ColorPoint]
-    ongoing_strokes: dict[ClientAddress, Stroke]
+    clients: dict[IP, ColorPoint]
+    ongoing_strokes: dict[IP, Stroke]
     finished_strokes: list[Stroke]
     change_flag: Flag
 
-    verifiers: dict[ClientAddress, Verifier] = field(default_factory=dict)
+    _verifiers: dict[IP, Verifier] = field(default_factory=dict)
+    _transport: Any = None  # used for returning messages
 
-    def connection_made(self, transport):
-        self.transport = transport  # noqa: used for returning messages
+    def connection_made(self, transport) -> None:
+        self._transport = transport
 
-    def datagram_received(self, data: bytes, full_addr: ClientAddress):
-        print(data)
-        addr = full_addr[0]
+    def datagram_received(self, data: bytes, full_address: ClientAddress) -> None:
+        client_ip = full_address[0]
 
-        if len(data) != 500:  # check if packet is dhcp packet
+        # Ping requests
+        if len(data) != 500:
             try:
-                self.verifiers[addr] = Verifier(data.strip())
-                print(f"Replying to DHCP discover packet from {addr}")
-                self.transport.sendto(b"Freddie nice to meet\r\r", full_addr)  # add useful info
+                self._verifiers[client_ip] = Verifier(data.strip())
+                self.ongoing_strokes[client_ip] = Stroke()
+                print(f"Replying to ping packet from new client at: {client_ip}")
+                self._transport.sendto(b"Freddie nice to meet\r\r", full_address)  # add useful info
             finally:
                 return
 
-        if not self.verifiers.get(addr):
+        # Verify signature
+        client_verifier: Verifier = self._verifiers.get(client_ip)
+        *current_position, pressed, signature_length = unpack(">ff iii", data[:20])
+        if (client_verifier is None) or (not client_verifier.verify(data[:16], data[20:20 + signature_length])):
+            print(f"Got a non-valid request from {client_ip}")
             return
 
-        # todo: do encryption
-        # todo: try to add stabilizer
-        if not self.verifiers[addr].verify(data[:16], data[20:20+unpack(">i", data[16:20])[0]]):  # todo: clean this
-            print(f"Got a non-valid request from {addr}")
-            return
-        print("bonanza")
-
-        old_position = self.clients.get(addr)
-        current_position: ColorPoint = unpack(">ffi", data[:12])  # noqa
-        if old_position is None:  # New client todo: move up
-            print(f"New client: {addr}")
-            self.clients[addr] = current_position
-            self.ongoing_strokes[addr] = Stroke()
-        else:
-            self.clients[addr] = nudge_point(old_position, current_position)
-
-        pressed = unpack(">i", data[12:16])[0]
+        # Update positions
+        self.clients[client_ip] = nudge_point(self.clients.get(client_ip), current_position)
         if pressed:
-            self.ongoing_strokes[addr].append(self.clients[addr][:2])
+            self.ongoing_strokes[client_ip].append(self.clients[client_ip][:2])
         else:
-            current_stroke = self.ongoing_strokes[addr]
+            current_stroke = self.ongoing_strokes[client_ip]
             if current_stroke.points:
                 current_stroke.color = current_position[2]
                 self.finished_strokes.append(current_stroke)
-                self.ongoing_strokes[addr] = Stroke()
+                self.ongoing_strokes[client_ip] = Stroke()
 
         self.change_flag.triggered = True
 
     @staticmethod
-    def error_received(exc):
+    def error_received(exc) -> None:
         print("Error received: ", exc)
 
     @staticmethod
-    def connection_lost(exc):  # Or ended
+    def connection_lost(exc) -> None:
         print("Error received: ", exc)
 
 
-def protocol_factory(clients: dict[ClientAddress, ColorPoint], ongoing_strokes: dict[ClientAddress, Stroke],
-                     finished_strokes: list[Stroke], change_flag: Flag) -> Callable:
+def protocol_factory(clients: dict[IP, ColorPoint], ongoing_strokes: dict[IP, Stroke],
+                     finished_strokes: list[Stroke], change_flag: Flag) -> Callable[[], ServerProtocol]:
     return lambda: ServerProtocol(clients, ongoing_strokes, finished_strokes, change_flag)
-
-
-def nudge_point(p1: ColorPoint, p2: ColorPoint) -> ColorPoint:
-    amp = 10  # when rps = 100
-    return (p1[0] * (amp - 1) + p2[0]) / amp, (p1[1] * (amp - 1) + p2[1]) / amp, p2[2]
