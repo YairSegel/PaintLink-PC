@@ -47,7 +47,7 @@ class Screen:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     try:
-                        self.save_file()
+                        self.save_canvas()
                     finally:
                         return
 
@@ -76,9 +76,8 @@ class Screen:
                 pygame.draw.circle(window, client[2], client_pos, POINT_RADIUS)
             pygame.display.flip()
 
-    def save_file(self):
+    def save_canvas(self):
         with asksaveasfile(initialfile='Untitled.png', defaultextension=".png") as f:
-            print(f)
             print(f"Saving canvas at: {(path := f.name)}")
         pygame.image.save_extended(self.permanent_canvas, path)
 
