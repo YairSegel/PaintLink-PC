@@ -11,6 +11,7 @@ async def main():
     ongoing_strokes = {}
     finished_strokes = []
     changed = Flag()
+    changed.triggered = True
 
     internal_ip = socket.gethostbyname(socket.gethostname())
     port = 12345

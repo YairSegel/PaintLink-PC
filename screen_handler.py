@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass
+from tkinter.filedialog import asksaveasfile
 
 import pygame
 from numpy import array as np_array, linspace as np_linspace
@@ -45,7 +46,10 @@ class Screen:
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    return
+                    try:
+                        self.save_file()
+                    finally:
+                        return
 
             if not self.update_flag.triggered:
                 continue
@@ -71,6 +75,12 @@ class Screen:
                 window.blit(self.pointer_svg, self.pointer_svg.get_rect(center=client_pos))
                 pygame.draw.circle(window, client[2], client_pos, POINT_RADIUS)
             pygame.display.flip()
+
+    def save_file(self):
+        with asksaveasfile(initialfile='Untitled.png', defaultextension=".png") as f:
+            print(f)
+            print(f"Saving canvas at: {(path := f.name)}")
+        pygame.image.save_extended(self.permanent_canvas, path)
 
 
 def line_finder(points: list[Point]) -> tuple[Point, ...]:
